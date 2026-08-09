@@ -1,6 +1,6 @@
 # trusted-builder
 
-Shared GitHub Actions workflows for every `CarlAllenn` repository, and the
+Shared GitHub Actions workflows for every Monumental Archive repository, and the
 SLSA v1.0 **Build L3** signing boundary for the ones that publish artifacts.
 
 Consumers verify a release against a workflow in *this* repository rather
@@ -70,7 +70,7 @@ jobs:
       id-token: write        # exactly these three, no more and no less
       attestations: write
       contents: read
-    uses: CarlAllenn/trusted-builder/.github/workflows/attest.yml@<commit-sha>
+    uses: monumental-archive/trusted-builder/.github/workflows/attest.yml@<commit-sha>
     with:
       subjects-artifact: subjects
       subjects-file: SUBJECTS.sha256
@@ -116,7 +116,7 @@ gh attestation verify <artifact> \
   --repo <owner>/<source-repo> \
   --source-ref refs/tags/v<version> \
   --source-digest <tagged-commit-sha> \
-  --signer-workflow CarlAllenn/trusted-builder/.github/workflows/attest.yml \
+  --signer-workflow monumental-archive/trusted-builder/.github/workflows/attest.yml \
   --signer-digest <builder-commit-sha> \
   --deny-self-hosted-runners
 ```

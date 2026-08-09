@@ -5,7 +5,7 @@ code in this repository.
 
 ## What this is
 
-Shared GitHub Actions workflows for every `CarlAllenn` repository, and — in
+Shared GitHub Actions workflows for every Monumental Archive repository, and — in
 `attest.yml` alone — the SLSA v1.0 **Build L3** signing boundary for the ones
 that publish artifacts. Callers verify releases against a workflow *here*
 rather than against the repository that built the bytes.
@@ -64,7 +64,7 @@ pass `--signer-digest` to pin `job_workflow_sha`.
 ## Testing
 
 Changes are exercised from
-[edtf-release-lab](https://github.com/CarlAllenn/edtf-release-lab) — dummy
+[edtf-release-lab](https://github.com/monumental-archive/edtf-release-lab) — dummy
 crates, real GitHub APIs, no registry publishes — before any production
 repository moves its pin. The release half of a pipeline is covered by
 nothing except live releases, which is the most expensive place to find a
