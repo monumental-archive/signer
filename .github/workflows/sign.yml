@@ -1,0 +1,192 @@
+# THE ORG'S SIGNING IDENTITY. Every artifact this organisation publishes
+# names this file as its SLSA `builder.id`, because the GitHub Actions
+# buildType defines that field as the entity that *generated the
+# provenance* — the workflow that assembled and signed it, not the one that
+# compiled the bytes. Consumers verify against this path.
+#
+# capability-boundary: this workflow holds `id-token: write` and runs no
+# caller-supplied code, which is the whole reason it exists as a separate
+# repository. The rule it enforces, in one line:
+#
+#   NOTHING HERE COMES FROM THE CALLER EXCEPT DECLARED INPUT VALUES.
+#
+# No `actions/checkout` — not of this repository and emphatically not of
+# the caller's. No caller scripts, no build, no cargo, no npm, no docker.
+# Inside a called workflow the `github` context is the CALLER's, so a bare
+# checkout here would fetch the calling repository at its tag, and any
+# `run:` step would then execute code the caller controls in the same job
+# as the OIDC token — which every step can retrieve through
+# $ACTIONS_ID_TOKEN_REQUEST_TOKEN. That is exactly the property this
+# boundary removes, and it is why GitHub calls the ordinary
+# "attest in your build job" pattern L2 rather than L3.
+#
+# SLSA v1.2 Build L3, secret material: signing keys "MUST NOT be accessible
+# to the environment running the user-defined build steps."
+#
+# The caller's own publish job may hold `id-token: write` for registry
+# trusted publishing, and a compromised build step there can still mint a
+# Fulcio certificate — but it will bear the CALLER's workflow identity in
+# OID .9, and every documented verification pins `--signer-workflow` to
+# THIS path plus `--signer-digest` for the commit. The reachable token is
+# not the one that counts.
+#
+# Residual, stated rather than hidden: the subject digests are computed by
+# the caller's build, so a compromised build can ask this workflow to sign
+# a digest of its choosing and it will. SLSA permits precisely that —
+# tenant-generated `subject` is explicit at L2-L3, and forging an output
+# digest is a declared non-threat (threats E2). Reproducible builds are the
+# leg that closes it; more hardening here is not.
+#
+# DO NOT RENAME this repository or move this file. `job_workflow_ref`
+# becomes the Fulcio certificate identity of every artifact the org ships,
+# and Sigstore is append-only: a rename breaks verification for everything
+# previously published, unfixably.
+name: sign
+
+on:
+  workflow_call:
+    inputs:
+      subjects:
+        description: >
+          The subject manifest, in `sha256sum` output format: one
+          "<64-hex-digest><two spaces><name>" line per artifact. Passed as
+          a value, never through the artifact store — a declared input is
+          delivered by the platform, so there is no transport to verify and
+          no artifact hop to guard. Every line is validated before use.
+        required: true
+        type: string
+      bundle-artifact:
+        description: >
+          Artifact name to publish the Sigstore bundle under, for the
+          caller's attach step to collect.
+        required: false
+        type: string
+        default: attestation-bundle
+    outputs:
+      bundle-artifact:
+        description: Artifact name the Sigstore bundle was uploaded under.
+        value: ${{ jobs.sign.outputs.bundle-artifact }}
+      attestation-id:
+        description: GitHub's identifier for the stored attestation.
+        value: ${{ jobs.sign.outputs.attestation-id }}
+
+permissions: {}
+
+jobs:
+  sign:
+    name: Sign provenance over the declared subjects
+    runs-on: ubuntu-latest
+    # Hang guard, not a budget: this job writes one text file and signs it.
+    timeout-minutes: 15
+    # Deliberately NO `environment:`. Measured in the lab: a reusable
+    # workflow's job resolves `environment:` against the CALLER, so one
+    # here would import each caller's protection rules into the middle of
+    # a release — pausing for approval after the bytes are published but
+    # before they are attested, which is the one place a pause is harmful.
+    # It would also buy nothing: environment secrets do not reach a
+    # reusable workflow at all (docs/slsa-reference.md in .github).
+    permissions:
+      # These three are EXACTLY what a caller must grant, no more and no
+      # less. A called workflow can only DOWNGRADE the caller's grant,
+      # never elevate it, so requesting a scope the caller withheld kills
+      # the run before any job starts — as `startup_failure`, with no jobs,
+      # no annotations and no log. Nothing local catches that: actionlint
+      # validates each repository in isolation and this contract spans two.
+      id-token: write # OIDC: the Sigstore signing identity
+      attestations: write # persist the provenance GitHub serves verifiers
+      artifact-metadata: write # the artifact storage record
+      #
+      # `contents: write` is absent and must stay absent. A signer that can
+      # publish is a signer that can be made to publish, and the release
+      # order — attest last, and only on proof — is enforceable only while
+      # this job cannot reach the caller's releases.
+    outputs:
+      bundle-artifact: ${{ steps.manifest.outputs.bundle-artifact }}
+      attestation-id: ${{ steps.attest.outputs.attestation-id }}
+    steps:
+      # No runner-hardening agent here, decided rather than overlooked. It
+      # is required by nothing this org targets — not SLSA Build L1-L3
+      # (whose "Isolated" requirement explicitly "does not prohibit a build
+      # from calling out to a remote execution service", and is a
+      # requirement on the platform, not on us), not the Source, Dependency
+      # or Build Environment tracks, not any of Scorecard's twenty checks,
+      # not Best Practices through Gold, not any OSPS Baseline control.
+      # Hermeticity remains a future-directions candidate that "may or may
+      # not" become a level.
+      #
+      # Against that, egress blocking has a measured cost in this
+      # organisation: wrong allowlists broke releases, in a pipeline where
+      # crates.io is yank-only and a pulled digest exists forever. Adding
+      # fragility to an irreversible pipeline to answer an unscored threat
+      # is the wrong trade, and admitting a third-party agent to the org
+      # allowlist — currently `verified_allowed: false` — would weaken a
+      # real control to add an unscored one.
+      #
+      # What protects this job is structural and cheaper: it runs no
+      # caller code, its four steps are first-party and SHA-pinned, and it
+      # holds no `contents: write`. Revisit only if SLSA promotes
+      # hermeticity into an actual level, and then derive the allowlist
+      # from audit data across real releases — never write it by
+      # construction, which is the mistake that burned the last attempt.
+      #
+      # Every caller-supplied value is routed through env and prefixed
+      # UNTRUSTED_: nothing the caller controls is ever expanded into `run:`
+      # code. The validation is whitelist-shaped — a line either is a
+      # sha256sum record or the job fails — because a permissive parse here
+      # signs whatever it was handed.
+      - name: Validate and materialise the subject manifest
+        id: manifest
+        env:
+          UNTRUSTED_SUBJECTS: ${{ inputs.subjects }}
+          UNTRUSTED_BUNDLE_ARTIFACT: ${{ inputs.bundle-artifact }}
+        run: |
+          set -euo pipefail
+          manifest="${RUNNER_TEMP}/subjects.sha256"
+          : > "${manifest}"
+          # sha256sum text mode: 64 lowercase hex, two spaces, a name.
+          record='^[0-9a-f]{64}  [^[:space:]]'
+          count=0
+          while IFS= read -r line; do
+            line="${line%$'\r'}"
+            [[ -n "${line}" ]] || continue
+            count=$((count + 1))
+            if [[ ! "${line}" =~ ${record} ]]; then
+              # The offending line is NOT echoed: it is caller-controlled,
+              # and a log line is a place workflow commands get parsed.
+              echo "::error::subject line ${count} is not a sha256sum record"
+              exit 1
+            fi
+            printf '%s\n' "${line}" >> "${manifest}"
+          done <<< "${UNTRUSTED_SUBJECTS}"
+          if ((count == 0)); then
+            echo "::error::no subjects declared — a signature over nothing is not a success"
+            exit 1
+          fi
+          # actions/attest caps a single attestation at 1024 subjects, and
+          # silently signing a truncated set would be worse than failing.
+          if ((count > 1024)); then
+            echo "::error::${count} subjects exceeds the 1024 an attestation carries"
+            exit 1
+          fi
+          echo "SUBJECTS_FILE=${manifest}" >> "${GITHUB_ENV}"
+          echo "bundle-artifact=${UNTRUSTED_BUNDLE_ARTIFACT}" >> "${GITHUB_OUTPUT}"
+          echo "::notice::${count} subjects declared and validated"
+          # Safe to echo: every line begins with 64 hex characters, so no
+          # line can start with a `::workflow-command::`.
+          cat "${manifest}"
+
+      # `subject-checksums` derives every subject from sha256sum's own
+      # output format, so this job never needs — and never receives — the
+      # artifact bytes themselves.
+      - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        id: attest
+        with:
+          subject-checksums: ${{ env.SUBJECTS_FILE }}
+
+      - name: Publish the Sigstore bundle back to the caller
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ steps.manifest.outputs.bundle-artifact }}
+          path: ${{ steps.attest.outputs.bundle-path }}
+          if-no-files-found: error
+          retention-days: 7
