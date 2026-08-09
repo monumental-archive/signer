@@ -116,6 +116,97 @@ it looks: **attestations do not follow a repository transfer** — after one,
 the API lookup 404s under both the old and the new owner — whereas the
 registry referrer is independent of who owns the repo.
 
+## Adopting it
+
+Two shapes. Both keep publishing in your repo — that never moves, because
+`cargo publish` and `docker build` execute code from your dependency tree and
+must not share a job with the signing identity.
+
+### Files (crates, tarballs, npm)
+
+Your build job produces a `sha256sum`-format checksums file and uploads it
+**alone** as an artifact, then:
+
+```yaml
+  attest:
+    needs: build
+    permissions:
+      id-token: write        # exactly these three
+      attestations: write
+      contents: read
+    uses: monumental-archive/trusted-builder/.github/workflows/attest.yml@<sha>
+    with:
+      subjects-artifact: subjects
+      subjects-file: SUBJECTS.sha256
+      subjects-digest: ${{ needs.build.outputs.subjects-digest }}
+
+  verify:
+    needs: [build, attest]
+    permissions:
+      contents: read         # and nothing else
+    uses: monumental-archive/trusted-builder/.github/workflows/verify.yml@<sha>
+    with:
+      artifacts-artifact: dist
+      source-repo: ${{ github.repository }}
+      source-ref: ${{ github.ref }}
+      source-digest: ${{ github.sha }}
+      signer-workflow: monumental-archive/trusted-builder/.github/workflows/attest.yml
+      signer-digest: <sha>
+```
+
+### Images
+
+Push by digest, then hand over the name and digest:
+
+```yaml
+  attest:
+    needs: push
+    permissions:
+      id-token: write
+      attestations: write
+      contents: read
+    uses: monumental-archive/trusted-builder/.github/workflows/attest-oci.yml@<sha>
+    with:
+      subject-name: ghcr.io/monumental-archive/<image>
+      subject-digest: ${{ needs.push.outputs.digest }}
+      push-to-registry: true   # see below
+
+  verify:
+    needs: [push, attest]
+    permissions:
+      contents: read
+      packages: read
+    uses: monumental-archive/trusted-builder/.github/workflows/verify-oci.yml@<sha>
+    with:
+      image: ghcr.io/monumental-archive/<image>
+      digest: ${{ needs.push.outputs.digest }}
+      source-repo: ${{ github.repository }}
+      source-ref: ${{ github.ref }}
+      source-digest: ${{ github.sha }}
+      signer-workflow: monumental-archive/trusted-builder/.github/workflows/attest-oci.yml
+      signer-digest: <sha>
+      bundle-from-oci: true
+```
+
+`push-to-registry: true` defaults off because it forces you to grant
+`packages: write` to a shared signing workflow. Turn it on when consumers
+gate on verification: it writes the attestation into the registry, which
+`bundle-from-oci` then reads — and that path survives a repository transfer,
+where the API lookup does not.
+
+### Three things that will bite
+
+1. **Grant exactly the scopes listed.** A called workflow may only downgrade
+   the caller's grant; asking for one you withheld kills the run as
+   `startup_failure` — no jobs, no annotations, no log, and `actionlint`
+   cannot see it because the contract spans two repositories.
+2. **Pin by commit SHA.** `uses:` accepts no contexts or expressions, so a
+   release tag freezes whichever SHA you wrote, permanently.
+3. **Your published verification command changes.** `--repo <you>` alone
+   stops working, because with no signer flag `gh` defaults its identity
+   regex to the source repo, which no longer matches the signer. Update
+   README and SECURITY.md in the same release.
+
 ## Verifying, downstream
 
 ```bash
