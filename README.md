@@ -15,13 +15,13 @@ stylistic — it is the security property.
 
 | Zone | Holds `id-token` | May run caller-supplied code |
 | --- | --- | --- |
-| **`attest.yml`** — the trusted builder | **yes** | **never** |
+| **`attest.yml`**, **`attest-oci.yml`** — the trusted builders | **yes** | **never** |
 | Everything else (shared release/CI helpers) | **never** | yes |
 
-`attest.yml` performs no `actions/checkout` — not of this repository and
-emphatically not of the caller's — runs no caller scripts, and receives
-exactly one thing across the boundary: a text file of digests. Four steps,
-all SHA-pinned first-party actions.
+Neither signing workflow performs an `actions/checkout` — not of this
+repository and emphatically not of the caller's — and neither runs caller
+scripts. What crosses the boundary is a text file of digests, or a name and
+a digest. Every step is a SHA-pinned first-party action.
 
 The reason is mechanical. Inside a called workflow the `github` context is
 the **caller's**, so a bare `actions/checkout` here fetches the *calling*
@@ -41,9 +41,9 @@ and SLSA v1.0 states the property:
 > accessible to the environment running the user-defined build steps.
 
 **Adding a `checkout`, a `run:` over caller data, or `contents: write` to
-`attest.yml` silently drops every consumer of this repository from Build L3
-to Build L2.** Nothing will go red. Treat that file as append-only-with-
-argument: changes to it need a stated reason in the PR.
+either signing workflow silently drops every consumer of this repository
+from Build L3 to Build L2.** Nothing will go red. Treat those two files as
+append-only-with-argument: changes to them need a stated reason in the PR.
 
 ## How L3 is actually achieved here
 

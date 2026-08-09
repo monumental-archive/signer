@@ -20,7 +20,7 @@ Two zones:
 
 | Zone | Holds `id-token` | May run caller-supplied code |
 | --- | --- | --- |
-| `attest.yml` | **yes** | **never** |
+| `attest.yml`, `attest-oci.yml` | **yes** | **never** |
 | everything else | **never** | yes |
 
 `attest.yml` performs **no `actions/checkout`** — not of this repository, not
