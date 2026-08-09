@@ -103,11 +103,18 @@ tooling discovers without GitHub's API — but it requires the caller to grant
 `packages: write`, handing a shared signing workflow write access to its
 registry. That is a per-repository decision, not a default.
 
-### `verify.yml` — verify as a consumer would
+### `verify.yml` / `verify-oci.yml` — verify as a consumer would
 
-Downloads artifacts and runs `gh attestation verify` with every pin the
-published instructions name. Holds **no** `id-token`: it handles bytes, so it
-must not be able to sign.
+`verify.yml` downloads artifacts and verifies each file; `verify-oci.yml`
+verifies an image by name and digest. Both run `gh attestation verify` with
+every pin the published instructions name, and both hold **no** `id-token`:
+they handle artifacts, so they must not be able to sign.
+
+`verify-oci.yml` takes `bundle-from-oci`, which reads the attestation from
+the OCI referrer rather than GitHub's attestation API. That matters more than
+it looks: **attestations do not follow a repository transfer** — after one,
+the API lookup 404s under both the old and the new owner — whereas the
+registry referrer is independent of who owns the repo.
 
 ## Verifying, downstream
 
