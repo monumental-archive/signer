@@ -2,7 +2,6 @@
 # settings, pins and lock.
 #
 # No language toolchain here, deliberately: this repository is YAML and
-# Markdown. A trusted builder with a compiler in it is a trusted builder with
-# a build in it.
+# Markdown. A signer with a compiler in it is a signer with a build in it.
 
 [tools]
