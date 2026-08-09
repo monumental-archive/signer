@@ -97,11 +97,14 @@ Takes `subject-name` (no tag, no digest) and `subject-digest`, validates both,
 and signs. Separate from `attest.yml` because the subject shapes genuinely
 differ: a checksums file yields many subjects, an image is exactly one.
 
+Callers must grant `id-token: write`, `attestations: write`, `contents: read`
+**and `packages: write`** — the last is declared by the job, so it is not
+optional even when `push-to-registry` is false.
+
 `push-to-registry` defaults to **false**. Turning it on also writes the
 attestation into the registry as an OCI referrer, which registry-native
-tooling discovers without GitHub's API — but it requires the caller to grant
-`packages: write`, handing a shared signing workflow write access to its
-registry. That is a per-repository decision, not a default.
+tooling discovers without GitHub's API — and, unlike the attestation API,
+survives a repository transfer.
 
 ### `verify.yml` / `verify-oci.yml` — verify as a consumer would
 

@@ -74,12 +74,17 @@ jobs:
       id-token: write # OIDC: the Sigstore signing identity
       attestations: write # store the provenance GitHub serves to verifiers
       contents: read
-      # Callers granting `push-to-registry` must ALSO grant `packages: write`.
-      # It is not requested here: a called workflow may only downgrade the
-      # caller's grant, so requesting a scope a caller withheld kills the run
-      # as `startup_failure` with no jobs and no annotations — which would
-      # make the common case (push-to-registry off) fail for every caller
-      # that sensibly declined to hand over registry write.
+      # Required, and the caller must grant it: a called workflow only gets
+      # the scopes it DECLARES, so omitting this made `push-to-registry: true`
+      # impossible — it would have failed at the registry write. Found by
+      # building the lab scenario rather than by review.
+      #
+      # This is the one scope the image signer needs beyond the file signer,
+      # and it is a real capability increase: registry write on the caller's
+      # namespace, held by a shared workflow. It is bounded by this job
+      # running no caller-supplied code at all. A caller unwilling to grant
+      # it should not use this workflow.
+      packages: write # write the attestation into the registry as a referrer
     outputs:
       attestation-id: ${{ steps.attest.outputs.attestation-id }}
     steps:
