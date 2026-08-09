@@ -100,6 +100,14 @@ gh attestation verify <artifact> \
   --deny-self-hosted-runners
 ```
 
+**Pin the workflow, never the repository.** `gh` also offers `--signer-repo`,
+which compiles to a prefix regex over the whole repository — so it would
+accept a signature from *any* workflow here, including a shared release-half
+workflow that legitimately runs caller code under the caller's own OIDC.
+File-level pinning is what keeps the two zones apart on the verifier's side.
+`--signer-repo` is safe only for a builder repository that contains nothing
+but signing workflows, and this one is not that.
+
 `--signer-workflow` compiles to a *prefix* regex over the certificate SAN, so
 it pins the workflow's path and **not** its ref — anyone able to push a
 branch here would produce a matching signer identity. `--signer-digest` pins
