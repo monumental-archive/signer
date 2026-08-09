@@ -91,6 +91,18 @@ pin is frozen into whatever ref the caller runs from — a tag, for a release.
 A bug in this workflow is therefore permanent for any tag that already
 references it, which is why it is kept as small as it is.
 
+### `attest-oci.yml` — sign provenance over an image
+
+Takes `subject-name` (no tag, no digest) and `subject-digest`, validates both,
+and signs. Separate from `attest.yml` because the subject shapes genuinely
+differ: a checksums file yields many subjects, an image is exactly one.
+
+`push-to-registry` defaults to **false**. Turning it on also writes the
+attestation into the registry as an OCI referrer, which registry-native
+tooling discovers without GitHub's API — but it requires the caller to grant
+`packages: write`, handing a shared signing workflow write access to its
+registry. That is a per-repository decision, not a default.
+
 ### `verify.yml` — verify as a consumer would
 
 Downloads artifacts and runs `gh attestation verify` with every pin the
