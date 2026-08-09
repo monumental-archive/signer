@@ -31,18 +31,28 @@ jobs:
       - uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
         with:
           egress-policy: block
+          disable-sudo: true
+          # Aligned with edtf's proven lint allowlist. tuf-repo-cdn is not
+          # optional: `locked_verify_provenance = true` re-verifies each
+          # tool's GitHub artifact attestation at install time, which fetches
+          # Sigstore's TUF root. Omitting it fails every tool install with a
+          # transport error that reads like a registry outage — the same
+          # class of defect as edtf#66, and it cost this repository's first
+          # CI run.
           allowed-endpoints: >
-            github.com:443
             api.github.com:443
-            objects.githubusercontent.com:443
-            release-assets.githubusercontent.com:443
             codeload.github.com:443
-            mise.jdx.dev:443
-            mise-versions.jdx.dev:443
-            registry.npmjs.org:443
-            nodejs.org:443
-            pypi.org:443
             files.pythonhosted.org:443
+            github.com:443
+            mise-versions.jdx.dev:443
+            mise.jdx.dev:443
+            nodejs.org:443
+            objects.githubusercontent.com:443
+            pypi.org:443
+            raw.githubusercontent.com:443
+            registry.npmjs.org:443
+            release-assets.githubusercontent.com:443
+            tuf-repo-cdn.sigstore.dev:443
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
