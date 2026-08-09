@@ -67,8 +67,8 @@ subjects from the digests, so the artifact bytes never travel here.
 jobs:
   attest:
     permissions:
-      id-token: write        # must be granted by the caller — a called
-      attestations: write    # workflow can only DOWNGRADE permissions
+      id-token: write        # exactly these three, no more and no less
+      attestations: write
       contents: read
     uses: CarlAllenn/trusted-builder/.github/workflows/attest.yml@<commit-sha>
     with:
@@ -76,6 +76,15 @@ jobs:
       subjects-file: SUBJECTS.sha256
       subjects-digest: ${{ needs.build.outputs.subjects-digest }}
 ```
+
+`verify.yml` needs `contents: read` and nothing else.
+
+**Grant exactly the listed scopes.** A called workflow may only *downgrade*
+the caller's grant, never elevate it, so if a workflow here requests a scope
+the caller withheld, the run dies as `startup_failure` — **no jobs, no
+annotations, no log**. Nothing catches it locally either: `actionlint`
+validates each repository in isolation and this contract spans both. That
+failure cost the first lab run, which is what a lab is for.
 
 Pin by **commit SHA**. `uses:` accepts no contexts or expressions, so the
 pin is frozen into whatever ref the caller runs from — a tag, for a release.

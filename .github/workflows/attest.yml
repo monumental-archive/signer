@@ -92,7 +92,17 @@ jobs:
       # caller's releases or contents; a trusted builder that can publish is
       # a trusted builder that can be made to publish.
       contents: read
-      actions: read
+      #
+      # These three are EXACTLY what a caller must grant, no more and no
+      # less. A called workflow can only DOWNGRADE the caller's grant, never
+      # elevate it — so requesting a scope the caller withheld kills the run
+      # before any job starts, as `startup_failure` with no jobs and no
+      # annotations. Nothing local catches it: actionlint validates each
+      # repository in isolation and the contract spans both.
+      #
+      # `actions: read` was here and is deliberately gone. Downloading an
+      # artifact from the SAME run does not need it, and every scope listed
+      # here is one the caller is forced to hand a signing workflow.
     outputs:
       bundle-artifact: ${{ steps.names.outputs.bundle-artifact }}
       attestation-id: ${{ steps.attest.outputs.attestation-id }}

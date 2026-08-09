@@ -75,9 +75,15 @@ jobs:
     # Hang guard, not a budget: downloads plus one verify call per artifact.
     timeout-minutes: 20
     permissions:
-      # Read-only throughout. No id-token: this job must not be able to sign.
+      # Read-only throughout, and no id-token: this job handles artifact
+      # bytes, so it must not be able to sign.
+      #
+      # `contents: read` is the whole grant a caller needs. Requesting more
+      # than the caller granted is an elevation, and a called workflow may
+      # only downgrade — the run then dies as `startup_failure` with no jobs
+      # and nothing to read. Keep this list minimal for that reason as much
+      # as for least privilege.
       contents: read
-      actions: read
     steps:
       - uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
         with:
