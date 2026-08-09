@@ -53,8 +53,34 @@ on:
           a value, never through the artifact store — a declared input is
           delivered by the platform, so there is no transport to verify and
           no artifact hop to guard. Every line is validated before use.
-        required: true
+
+          Exactly one of `subjects` or `image-name`+`image-digest` must be
+          given: a file artifact is identified by its content hash, an
+          image by a registry-qualified name and a digest, and they are not
+          interchangeable.
+        required: false
         type: string
+        default: ""
+      image-name:
+        description: >
+          Fully-qualified image name for an OCI subject, e.g.
+          `ghcr.io/owner/name`. Registry-qualified and lowercase — ghcr.io
+          rejects an owner with capitals, which is a failure that surfaces
+          only at push time.
+        required: false
+        type: string
+        default: ""
+      image-digest:
+        description: >
+          Digest of the OCI subject, `sha256:<64 hex>`. For a multi-arch
+          image this is the **index** digest: measured in the lab,
+          `gh attestation verify oci://<image>:<tag>` resolves the index, so
+          attesting it is what covers the ordinary pull path. Per-arch
+          digests are not covered and are attested separately where
+          consumers pin an architecture.
+        required: false
+        type: string
+        default: ""
       bundle-artifact:
         description: >
           Artifact name to publish the Sigstore bundle under, for the
@@ -102,7 +128,7 @@ jobs:
       # this job cannot reach the caller's releases.
     outputs:
       bundle-artifact: ${{ steps.manifest.outputs.bundle-artifact }}
-      attestation-id: ${{ steps.attest.outputs.attestation-id }}
+      attestation-id: ${{ steps.attest.outputs.attestation-id || steps.attest-image.outputs.attestation-id }}
     steps:
       # No runner-hardening agent here, decided rather than overlooked. It
       # is required by nothing this org targets — not SLSA Build L1-L3
@@ -138,9 +164,51 @@ jobs:
         id: manifest
         env:
           UNTRUSTED_SUBJECTS: ${{ inputs.subjects }}
+          UNTRUSTED_IMAGE_NAME: ${{ inputs.image-name }}
+          UNTRUSTED_IMAGE_DIGEST: ${{ inputs.image-digest }}
           UNTRUSTED_BUNDLE_ARTIFACT: ${{ inputs.bundle-artifact }}
         run: |
           set -euo pipefail
+          echo "bundle-artifact=${UNTRUSTED_BUNDLE_ARTIFACT}" >> "${GITHUB_OUTPUT}"
+
+          # Exactly one subject shape. Both would sign two unrelated things
+          # under one certificate; neither would sign nothing and report
+          # success, which is the failure this workflow exists to refuse.
+          have_files=0; have_image=0
+          [[ -n "${UNTRUSTED_SUBJECTS//[[:space:]]/}" ]] && have_files=1
+          [[ -n "${UNTRUSTED_IMAGE_NAME}" || -n "${UNTRUSTED_IMAGE_DIGEST}" ]] && have_image=1
+          if ((have_files + have_image != 1)); then
+            echo "::error::give exactly one of subjects, or image-name plus image-digest"
+            exit 1
+          fi
+
+          if ((have_image)); then
+            if [[ -z "${UNTRUSTED_IMAGE_NAME}" || -z "${UNTRUSTED_IMAGE_DIGEST}" ]]; then
+              echo "::error::an image subject needs BOTH image-name and image-digest"
+              exit 1
+            fi
+            if [[ ! "${UNTRUSTED_IMAGE_DIGEST}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+              echo "::error::image-digest must be sha256:<64 lowercase hex>"
+              exit 1
+            fi
+            # ghcr.io rejects an owner with capitals, and the failure lands
+            # at push time rather than here unless it is checked.
+            #
+            # `tr`, not ${var,,}: the latter is bash 4+, and macOS ships
+            # bash 3.2. A bash-4-ism here runs fine on the runner and
+            # cannot be tested on the machine this is written on, which
+            # defeats the point of testing it before spending a release.
+            lowered=$(printf '%s' "${UNTRUSTED_IMAGE_NAME}" | tr '[:upper:]' '[:lower:]')
+            if [[ "${UNTRUSTED_IMAGE_NAME}" != "${lowered}" ]]; then
+              echo "::error::image-name must be lowercase"
+              exit 1
+            fi
+            echo "mode=image" >> "${GITHUB_OUTPUT}"
+            echo "::notice::signing one image subject"
+            exit 0
+          fi
+
+          echo "mode=files" >> "${GITHUB_OUTPUT}"
           manifest="${RUNNER_TEMP}/subjects.sha256"
           : > "${manifest}"
           # sha256sum text mode: 64 lowercase hex, two spaces, a name.
@@ -169,7 +237,6 @@ jobs:
             exit 1
           fi
           echo "SUBJECTS_FILE=${manifest}" >> "${GITHUB_ENV}"
-          echo "bundle-artifact=${UNTRUSTED_BUNDLE_ARTIFACT}" >> "${GITHUB_OUTPUT}"
           echo "::notice::${count} subjects declared and validated"
           # Safe to echo: every line begins with 64 hex characters, so no
           # line can start with a `::workflow-command::`.
@@ -180,13 +247,28 @@ jobs:
       # artifact bytes themselves.
       - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         id: attest
+        if: steps.manifest.outputs.mode == 'files'
         with:
           subject-checksums: ${{ env.SUBJECTS_FILE }}
+
+      # No `push-to-registry`, deliberately. It would store the attestation
+      # as an OCI referrer, which SLSA prefers long-term, but it costs this
+      # job `packages: write` — a write capability on the registry, in the
+      # one repository whose whole value is holding as little as possible.
+      # Measured in the lab: `gh attestation verify oci://<image>:<tag>`
+      # resolves and passes without it, against GitHub's attestation store.
+      # Revisit as a written decision, not as a default.
+      - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        id: attest-image
+        if: steps.manifest.outputs.mode == 'image'
+        with:
+          subject-name: ${{ inputs.image-name }}
+          subject-digest: ${{ inputs.image-digest }}
 
       - name: Publish the Sigstore bundle back to the caller
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ${{ steps.manifest.outputs.bundle-artifact }}
-          path: ${{ steps.attest.outputs.bundle-path }}
+          path: ${{ steps.attest.outputs.bundle-path || steps.attest-image.outputs.bundle-path }}
           if-no-files-found: error
           retention-days: 7
