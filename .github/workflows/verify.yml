@@ -179,4 +179,6 @@ jobs:
 
           [[ ${fail} -eq 0 ]] || exit 1
 
-          echo "::notice::${checked} artifacts verified — source ${UNTRUSTED_SOURCE_REPO} @ ${UNTRUSTED_SOURCE_REF}, signer ${UNTRUSTED_SIGNER_WORKFLOW}"
+          echo "::notice::${checked} artifacts verified"
+          echo "::notice::  source ${UNTRUSTED_SOURCE_REPO} @ ${UNTRUSTED_SOURCE_REF}"
+          echo "::notice::  signer ${UNTRUSTED_SIGNER_WORKFLOW}"

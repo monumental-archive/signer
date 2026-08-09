@@ -86,8 +86,8 @@ jobs:
     timeout-minutes: 15
     permissions:
       # The signing identity. Present here and nowhere near a build step.
-      id-token: write
-      attestations: write
+      id-token: write # OIDC: the Sigstore signing identity
+      attestations: write # store the provenance GitHub serves to verifiers
       # Read-only, deliberately. This job must never be able to write to the
       # caller's releases or contents; a trusted builder that can publish is
       # a trusted builder that can be made to publish.

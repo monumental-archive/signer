@@ -1,0 +1,83 @@
+---
+name: CI
+
+# The gate for the repository that signs for every other repository. Nothing
+# here builds or tests software — there is none — so the whole gate is the
+# linter set, run at max enforcement with warnings as errors.
+#
+# zizmor is the load-bearing one: this repository is nothing but workflows,
+# and a workflow defect here is a supply-chain defect for every caller.
+
+"on":
+  pull_request: {}
+  push:
+    branches: [main]
+
+permissions: {}
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    # Hang guard, not a budget: this is a handful of linters over a dozen files.
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            github.com:443
+            api.github.com:443
+            objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
+            codeload.github.com:443
+            mise.jdx.dev:443
+            mise-versions.jdx.dev:443
+            registry.npmjs.org:443
+            nodejs.org:443
+            pypi.org:443
+            files.pythonhosted.org:443
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # gitleaks scans history, so the whole history has to be present.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: jdx/mise-action@9e7f7633ff6f6d6048a9418a68d48f288f50eb14 # v4.2.3
+        with:
+          # renovate: datasource=github-releases depName=jdx/mise
+          version: 2026.7.18
+          cache: false
+
+      - name: yamllint
+        run: yamllint --strict .
+
+      - name: actionlint
+        run: actionlint
+
+      # Pedantic persona, offline: the same tier edtf gates on, so a workflow
+      # that would fail review there fails here first.
+      - name: zizmor
+        run: zizmor --persona=pedantic --offline .github/
+
+      - name: markdownlint
+        run: markdownlint-cli2
+
+      - name: codespell
+        run: codespell
+
+      - name: editorconfig-checker
+        run: ec
+
+      - name: taplo
+        run: taplo fmt --check --diff
+
+      - name: gitleaks
+        run: gitleaks git --no-banner --redact

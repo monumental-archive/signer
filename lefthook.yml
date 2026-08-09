@@ -1,0 +1,16 @@
+---
+# Git hooks: every commit and push passes the full gate. The universal lint
+# layer (shfmt/shellcheck/yamllint/taplo/markdownlint/codespell/ec/
+# actionlint/zizmor + conventional-commit enforcement) is consumed LIVE from
+# renovate-config via remotes:. We comply with the tools; fixing output is
+# never optional. Personal overrides go in lefthook-local.yml (gitignored).
+#
+# There are no per-stack jobs here and there should not be: this repository
+# holds no language toolchain, and the universal layer already covers every
+# format it contains.
+
+remotes:
+  - git_url: https://github.com/CarlAllenn/renovate-config
+    refetch_frequency: 24h
+    configs:
+      - lefthook/universal.yml

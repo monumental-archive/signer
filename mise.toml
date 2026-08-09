@@ -1,0 +1,54 @@
+# Settings block: canonical baseline from CarlAllenn/renovate-config
+# templates/mise/settings.toml — drift-audited, do not edit locally.
+min_version = "2026.7.18"
+
+[settings]
+lockfile = true                 # mise.lock records resolved versions + checksums
+pin = true                      # `mise use` writes exact versions, never ranges
+activate_aggressive = true      # tool bin-paths go to FRONT of PATH (system tools can never shadow pins)
+locked_verify_provenance = true # re-verify provenance on install even when the lockfile has entries
+# Strict mode: install only from pre-resolved lockfile URLs — no registry/API
+# resolution, and ad-hoc `mise x tool@ver` installs of unpinned tools fail
+# (mechanical no-ad-hoc enforcement).
+locked = true
+# Never install a release younger than 7 days — the same number as the
+# Renovate minimumReleaseAge and pnpm gates (three-layer policy).
+minimum_release_age = "168h"
+# Dev Mac + CI runners; the default would also lock musl/windows we never target.
+lockfile_platforms = ["macos-arm64", "linux-x64", "linux-arm64"]
+# asdf plugins are legacy (single-maintainer bash, no checksums); ubi is
+# deprecated upstream in favor of github:.
+disable_backends = ["asdf", "ubi"]
+
+# Bootstrap guarantee: a fresh clone gets its git hooks installed by the
+# standard `mise install`; without this, .git/hooks/ is empty and the whole
+# enforcement layer silently doesn't exist. Idempotent; lefthook auto-resyncs
+# hooks on every run thereafter. CI-guarded, as git hooks are meaningless in CI.
+[hooks]
+postinstall = 'test -n "${CI:-}" || lefthook install'
+
+# No language toolchain: this repository is YAML and Markdown only. That is a
+# property worth keeping — a trusted builder with a compiler in it is a
+# trusted builder with a build in it.
+[tools]
+task = "3.52.0"
+
+# Enforcement layer (max: every text format has a linter, warnings are errors)
+lefthook = "2.1.10"
+actionlint = "1.7.12"
+# GitHub Actions security audit — the load-bearing linter here, since this
+# repository is nothing but workflows.
+"aqua:zizmorcore/zizmor" = "1.28.0"
+taplo = "0.10.0"
+yamllint = "1.38.0"
+editorconfig-checker = "3.8.0"
+uv = "0.12.1"
+"pipx:codespell" = "2.4.3"
+# actionlint shells out to these for the embedded `run:` blocks.
+shellcheck = "0.11.0"
+shfmt = "3.13.1"
+# runtime for markdownlint-cli2
+node = "26.5.1"
+"npm:markdownlint-cli2" = "0.23.2"
+# secret scan: staged (universal hook) + CI history job
+gitleaks = "8.30.1"
