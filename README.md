@@ -37,22 +37,26 @@ It was renamed from `trusted-builder` before anything was published, because
 that name described a builder and this repository has never built anything.
 That window is closed.
 
-## Current state: stripped, pending phase-2 canon
+## What lives here
 
-The previous generation of workflows has been removed. They were written for
-one project's pipeline, and the release design in
-[issue #28](https://github.com/monumental-archive/.github/issues/28)
-rebuilds this repository from the specification rather than carrying them
-forward.
+One signing workflow, [`sign.yml`](.github/workflows/sign.yml), plus the
+org CI gate stub, and nothing else — a change to the set of files in this
+repository is a design event, not housekeeping.
 
-What arrives here when phase-2 canon is designed:
+`sign.yml` takes exactly one subject shape per call — a `sha256sum`
+manifest for file artifacts, or a name-plus-digest pair for an OCI image —
+delivered as declared input values, never through the artifact store. It
+holds `id-token: write`, `attestations: write` and
+`artifact-metadata: write`, and never `contents: write`: a signer that can
+publish is a signer that can be made to publish.
 
-- **one** signing workflow, taking a subject manifest and nothing else
-- no `actions/download-artifact`, no checkout of a caller, no `run:` over
-  caller-controlled values
-- `id-token: write`, `attestations: write`, `artifact-metadata: write`, and
-  never `contents: write`
+Beyond build provenance it signs **allowlisted predicate claims** (the
+artifact VSA and OpenVEX today): the case statement in its validate step
+is the org's entire signing surface, enumerable by reading the one file,
+and growing it is a reviewed change here. Every claim type verifies
+against the same identity; consumers vary only `--predicate-type`.
 
-Until then this repository conforms to the org gate and holds no logic.
-The canon is `docs/release.md` and `docs/slsa-reference.md` in
-[`.github`](https://github.com/monumental-archive/.github).
+The full canon — orchestration, ordering, the stranger's verification
+one-liners — is `docs/release.md` and `docs/runbook.md` in
+[`.github`](https://github.com/monumental-archive/.github); the design
+history is issues #28 and #107 there.
