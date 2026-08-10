@@ -37,6 +37,16 @@
 # digest is a declared non-threat (threats E2). Reproducible builds are the
 # leg that closes it; more hardening here is not.
 #
+# The same residual extends to predicates: a caller can hand this workflow
+# a false claim and it will be signed. Two things bound it. The predicate
+# TYPE is allowlist-shaped — the case statement in the validate step is the
+# org's entire signing surface, enumerable by reading this file, and
+# growing it is a reviewed change here. The predicate CONTENT is bounded by
+# placement, not by this file: every predicate must be assembled in a job
+# that runs no caller-supplied code (the VSA from verify-published's
+# results, VEX from the org's own tooling), which is a contract on the
+# callers that this workflow cannot check and does not pretend to.
+#
 # DO NOT RENAME this repository or move this file. `job_workflow_ref`
 # becomes the Fulcio certificate identity of every artifact the org ships,
 # and Sigstore is append-only: a rename breaks verification for everything
@@ -78,6 +88,28 @@ on:
           attesting it is what covers the ordinary pull path. Per-arch
           digests are not covered and are attested separately where
           consumers pin an architecture.
+        required: false
+        type: string
+        default: ""
+      predicate-type:
+        description: >
+          Predicate type URI for a claim other than build provenance. Must
+          name a type on the allowlist in the validate step — that list is
+          the org's signing surface, and a type not on it is refused.
+          Empty means what it always meant: SLSA build provenance over the
+          subjects.
+        required: false
+        type: string
+        default: ""
+      predicate:
+        description: >
+          The predicate document as JSON, required exactly when
+          `predicate-type` is given and refused otherwise. Passed as a
+          value for the same reason `subjects` is: a declared input has no
+          transport to verify and no artifact hop to guard. Callers MUST
+          assemble it in a job that runs no caller-supplied code — this
+          workflow signs what it is handed, and that residual covers whole
+          claims, not just digests (see the header).
         required: false
         type: string
         default: ""
@@ -128,7 +160,7 @@ jobs:
       # this job cannot reach the caller's releases.
     outputs:
       bundle-artifact: ${{ steps.manifest.outputs.bundle-artifact }}
-      attestation-id: ${{ steps.attest.outputs.attestation-id || steps.attest-image.outputs.attestation-id }}
+      attestation-id: ${{ steps.attest.outputs.attestation-id || steps.attest-image.outputs.attestation-id || steps.attest-predicate.outputs.attestation-id || steps.attest-image-predicate.outputs.attestation-id }}
     steps:
       # No runner-hardening agent here, decided rather than overlooked. It
       # is required by nothing this org targets — not SLSA Build L1-L3
@@ -149,7 +181,7 @@ jobs:
       # real control to add an unscored one.
       #
       # What protects this job is structural and cheaper: it runs no
-      # caller code, its four steps are first-party and SHA-pinned, and it
+      # caller code, its steps are all first-party and SHA-pinned, and it
       # holds no `contents: write`. Revisit only if SLSA promotes
       # hermeticity into an actual level, and then derive the allowlist
       # from audit data across real releases — never write it by
@@ -166,10 +198,48 @@ jobs:
           UNTRUSTED_SUBJECTS: ${{ inputs.subjects }}
           UNTRUSTED_IMAGE_NAME: ${{ inputs.image-name }}
           UNTRUSTED_IMAGE_DIGEST: ${{ inputs.image-digest }}
+          UNTRUSTED_PREDICATE_TYPE: ${{ inputs.predicate-type }}
+          UNTRUSTED_PREDICATE: ${{ inputs.predicate }}
           UNTRUSTED_BUNDLE_ARTIFACT: ${{ inputs.bundle-artifact }}
         run: |
           set -euo pipefail
           echo "bundle-artifact=${UNTRUSTED_BUNDLE_ARTIFACT}" >> "${GITHUB_OUTPUT}"
+
+          # THE ALLOWLIST. This case statement is the complete set of claim
+          # types the org is willing to sign; everything else is refused.
+          # Adding a type is a reviewed change to this file — which is the
+          # point: the signing surface stays enumerable by reading it.
+          predicate=false
+          if [[ -n "${UNTRUSTED_PREDICATE_TYPE}" || -n "${UNTRUSTED_PREDICATE//[[:space:]]/}" ]]; then
+            case "${UNTRUSTED_PREDICATE_TYPE}" in
+              https://slsa.dev/verification_summary/v1) ;; # artifact VSA
+              https://openvex.dev/ns/v0.2.0) ;; # OpenVEX
+              *)
+                # The offending value is NOT echoed: it is caller-controlled.
+                echo "::error::predicate-type is not on this signer's allowlist"
+                exit 1
+                ;;
+            esac
+            if [[ -z "${UNTRUSTED_PREDICATE//[[:space:]]/}" ]]; then
+              echo "::error::predicate-type without a predicate asserts nothing"
+              exit 1
+            fi
+            # A JSON object or the job fails — the same whitelist-shaped
+            # posture as the subject records. jq is the parser so that what
+            # is signed is exactly one well-formed document, and the
+            # re-serialisation strips anything a lenient parser would have
+            # tolerated. The document itself is never echoed.
+            predicate_file="${RUNNER_TEMP}/predicate.json"
+            if ! printf '%s' "${UNTRUSTED_PREDICATE}" | jq -e 'type == "object"' > /dev/null 2>&1; then
+              echo "::error::predicate is not a single JSON object"
+              exit 1
+            fi
+            printf '%s' "${UNTRUSTED_PREDICATE}" | jq -c '.' > "${predicate_file}"
+            echo "PREDICATE_FILE=${predicate_file}" >> "${GITHUB_ENV}"
+            predicate=true
+            echo "::notice::predicate claim: ${UNTRUSTED_PREDICATE_TYPE}"
+          fi
+          echo "predicate=${predicate}" >> "${GITHUB_OUTPUT}"
 
           # Exactly one subject shape. Both would sign two unrelated things
           # under one certificate; neither would sign nothing and report
@@ -247,9 +317,23 @@ jobs:
       # artifact bytes themselves.
       - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         id: attest
-        if: steps.manifest.outputs.mode == 'files'
+        if: steps.manifest.outputs.mode == 'files' && steps.manifest.outputs.predicate == 'false'
         with:
           subject-checksums: ${{ env.SUBJECTS_FILE }}
+
+      # The predicate variants are separate steps, not conditional inputs:
+      # the provenance steps must keep calling the action exactly as every
+      # verified release has, and `with:` cannot omit a key conditionally.
+      # `predicate-path`, never `predicate`: the document was already
+      # materialised by jq, and handing the action a file avoids a second
+      # trip through expression expansion.
+      - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        id: attest-predicate
+        if: steps.manifest.outputs.mode == 'files' && steps.manifest.outputs.predicate == 'true'
+        with:
+          subject-checksums: ${{ env.SUBJECTS_FILE }}
+          predicate-type: ${{ inputs.predicate-type }}
+          predicate-path: ${{ env.PREDICATE_FILE }}
 
       # No `push-to-registry`, deliberately. It would store the attestation
       # as an OCI referrer, which SLSA prefers long-term, but it costs this
@@ -260,15 +344,24 @@ jobs:
       # Revisit as a written decision, not as a default.
       - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         id: attest-image
-        if: steps.manifest.outputs.mode == 'image'
+        if: steps.manifest.outputs.mode == 'image' && steps.manifest.outputs.predicate == 'false'
         with:
           subject-name: ${{ inputs.image-name }}
           subject-digest: ${{ inputs.image-digest }}
+
+      - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        id: attest-image-predicate
+        if: steps.manifest.outputs.mode == 'image' && steps.manifest.outputs.predicate == 'true'
+        with:
+          subject-name: ${{ inputs.image-name }}
+          subject-digest: ${{ inputs.image-digest }}
+          predicate-type: ${{ inputs.predicate-type }}
+          predicate-path: ${{ env.PREDICATE_FILE }}
 
       - name: Publish the Sigstore bundle back to the caller
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ${{ steps.manifest.outputs.bundle-artifact }}
-          path: ${{ steps.attest.outputs.bundle-path || steps.attest-image.outputs.bundle-path }}
+          path: ${{ steps.attest.outputs.bundle-path || steps.attest-image.outputs.bundle-path || steps.attest-predicate.outputs.bundle-path || steps.attest-image-predicate.outputs.bundle-path }}
           if-no-files-found: error
           retention-days: 7
