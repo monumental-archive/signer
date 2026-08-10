@@ -18,4 +18,11 @@ concurrency:
 
 jobs:
   ci:
+    permissions:
+      # Stated, not inherited. A `uses:` job takes the WORKFLOW-level
+      # default rather than any ambient grant, so when a shared workflow
+      # gains a permission every caller that stayed silent dies as
+      # startup_failure with no jobs and no log. Saying it here makes the
+      # contract a diff rather than a mystery.
+      contents: read # checkout of this repo and of the toolbelt
     uses: monumental-archive/.github/.github/workflows/ci.yml@8c61637d84f1a6014df0b5c4c4cc1ea4316ac1f6 # main 2026-08-09
