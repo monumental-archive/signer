@@ -25,4 +25,4 @@ jobs:
       # startup_failure with no jobs and no log. Saying it here makes the
       # contract a diff rather than a mystery.
       contents: read # checkout of this repo and of the toolbelt
-    uses: monumental-archive/.github/.github/workflows/ci.yml@97f6eb0930296219b75507fd43d9d04892c4c3b9 # v1.7.1
+    uses: monumental-archive/.github/.github/workflows/ci.yml@c9e057944f1307362f4f12dbdfb6e10e9a2d066d # v1.11.1
