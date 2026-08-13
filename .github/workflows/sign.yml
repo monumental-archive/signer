@@ -43,9 +43,10 @@
 # org's entire signing surface, enumerable by reading this file, and
 # growing it is a reviewed change here. The predicate CONTENT is bounded by
 # placement, not by this file: every predicate must be assembled in a job
-# that runs no caller-supplied code (the VSA from verify-published's
-# results, VEX from the org's own tooling), which is a contract on the
-# callers that this workflow cannot check and does not pretend to.
+# that runs no caller-supplied code (today that is VEX from the org's own
+# tooling; VSAs moved to the verifier's own identity in canon v1.14.0),
+# which is a contract on the callers that this workflow cannot check and
+# does not pretend to.
 #
 # DO NOT RENAME this repository or move this file. `job_workflow_ref`
 # becomes the Fulcio certificate identity of every artifact the org ships,
@@ -212,7 +213,18 @@ jobs:
           predicate=false
           if [[ -n "${UNTRUSTED_PREDICATE_TYPE}" || -n "${UNTRUSTED_PREDICATE//[[:space:]]/}" ]]; then
             case "${UNTRUSTED_PREDICATE_TYPE}" in
-              https://slsa.dev/verification_summary/v1) ;; # artifact VSA
+              # verification_summary/v1 was REMOVED from this list
+              # (monumental-archive/.github#349 finding 6): since the
+              # verifier signs its own verdicts under its own identity
+              # (#264, canon v1.14.0), no caller needs this signer to
+              # mint a VSA — and a capability with no live caller is a
+              # path for any caller to mint a syntactically perfect
+              # PASSED under the signer identity. Verdicts signed here
+              # before v1.14.0 still VERIFY against this workflow's
+              # historical identity; removal closes the mint, not the
+              # record. The org's declared surface lives in the canon:
+              # security/signing-surface.toml, reconciled against this
+              # case statement by audit:signer-surface.
               https://openvex.dev/ns/v0.2.0) ;; # OpenVEX
               *)
                 # The offending value is NOT echoed: it is caller-controlled.
