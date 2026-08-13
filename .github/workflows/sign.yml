@@ -133,7 +133,7 @@ permissions: {}
 jobs:
   sign:
     name: Sign provenance over the declared subjects
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Hang guard, not a budget: this job writes one text file and signs it.
     timeout-minutes: 15
     # Deliberately NO `environment:`. Measured in the lab: a reusable
