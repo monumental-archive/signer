@@ -35,17 +35,20 @@
 # and zero secrets, consuming the claim set as data across the job
 # boundary. The read token can read rulesets; it cannot sign or push.
 # A compromised attest job has no secret to take.
+---
 name: source-attest
 
-on:
+"on":
   push:
-    branches: [main]
+    branches:
+      - main
+
   workflow_dispatch:
     inputs:
       genesis:
         description: Found the chain (refused if a link already exists)
         required: false
-        default: "false"
+        default: false
         type: string
 
 permissions: {}
@@ -92,3 +95,4 @@ jobs:
           stage: attest
           claims: ${{ needs.claims.outputs.claims }}
           genesis: ${{ github.event.inputs.genesis || 'false' }}
+...

@@ -7,4 +7,6 @@
 # shell: python (record the reason here if that changes).
 self-hosted-runner:
   labels: []
+
 config-variables: []
+...
