@@ -52,9 +52,10 @@
 # becomes the Fulcio certificate identity of every artifact the org ships,
 # and Sigstore is append-only: a rename breaks verification for everything
 # previously published, unfixably.
+---
 name: sign
 
-on:
+"on":
   workflow_call:
     inputs:
       subjects:
@@ -161,7 +162,14 @@ jobs:
       # this job cannot reach the caller's releases.
     outputs:
       bundle-artifact: ${{ steps.manifest.outputs.bundle-artifact }}
-      attestation-id: ${{ steps.attest.outputs.attestation-id || steps.attest-image.outputs.attestation-id || steps.attest-predicate.outputs.attestation-id || steps.attest-image-predicate.outputs.attestation-id }}
+      # Folded rather than one line: the org's 130-column rule reaches
+      # workflows too, and a `>-` scalar rejoins on spaces, so the
+      # expression the runner sees is byte-identical to the long form.
+      attestation-id: >-
+        ${{ steps.attest.outputs.attestation-id
+        || steps.attest-image.outputs.attestation-id
+        || steps.attest-predicate.outputs.attestation-id
+        || steps.attest-image-predicate.outputs.attestation-id }}
     steps:
       # No runner-hardening agent here, decided rather than overlooked. It
       # is required by nothing this org targets — not SLSA Build L1-L3
@@ -211,7 +219,7 @@ jobs:
           # Adding a type is a reviewed change to this file — which is the
           # point: the signing surface stays enumerable by reading it.
           predicate=false
-          if [[ -n "${UNTRUSTED_PREDICATE_TYPE}" || -n "${UNTRUSTED_PREDICATE//[[:space:]]/}" ]]; then
+          if [[ -n ${UNTRUSTED_PREDICATE_TYPE} || -n ${UNTRUSTED_PREDICATE//[[:space:]]/} ]]; then
             case "${UNTRUSTED_PREDICATE_TYPE}" in
               # verification_summary/v1 was REMOVED from this list
               # (monumental-archive/.github#349 finding 6): since the
@@ -232,7 +240,7 @@ jobs:
                 exit 1
                 ;;
             esac
-            if [[ -z "${UNTRUSTED_PREDICATE//[[:space:]]/}" ]]; then
+            if [[ -z ${UNTRUSTED_PREDICATE//[[:space:]]/} ]]; then
               echo "::error::predicate-type without a predicate asserts nothing"
               exit 1
             fi
@@ -256,20 +264,21 @@ jobs:
           # Exactly one subject shape. Both would sign two unrelated things
           # under one certificate; neither would sign nothing and report
           # success, which is the failure this workflow exists to refuse.
-          have_files=0; have_image=0
-          [[ -n "${UNTRUSTED_SUBJECTS//[[:space:]]/}" ]] && have_files=1
-          [[ -n "${UNTRUSTED_IMAGE_NAME}" || -n "${UNTRUSTED_IMAGE_DIGEST}" ]] && have_image=1
+          have_files=0
+          have_image=0
+          [[ -n ${UNTRUSTED_SUBJECTS//[[:space:]]/} ]] && have_files=1
+          [[ -n ${UNTRUSTED_IMAGE_NAME} || -n ${UNTRUSTED_IMAGE_DIGEST} ]] && have_image=1
           if ((have_files + have_image != 1)); then
             echo "::error::give exactly one of subjects, or image-name plus image-digest"
             exit 1
           fi
 
           if ((have_image)); then
-            if [[ -z "${UNTRUSTED_IMAGE_NAME}" || -z "${UNTRUSTED_IMAGE_DIGEST}" ]]; then
+            if [[ -z ${UNTRUSTED_IMAGE_NAME} || -z ${UNTRUSTED_IMAGE_DIGEST} ]]; then
               echo "::error::an image subject needs BOTH image-name and image-digest"
               exit 1
             fi
-            if [[ ! "${UNTRUSTED_IMAGE_DIGEST}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            if [[ ! ${UNTRUSTED_IMAGE_DIGEST} =~ ^sha256:[0-9a-f]{64}$ ]]; then
               echo "::error::image-digest must be sha256:<64 lowercase hex>"
               exit 1
             fi
@@ -281,7 +290,7 @@ jobs:
             # cannot be tested on the machine this is written on, which
             # defeats the point of testing it before spending a release.
             lowered=$(printf '%s' "${UNTRUSTED_IMAGE_NAME}" | tr '[:upper:]' '[:lower:]')
-            if [[ "${UNTRUSTED_IMAGE_NAME}" != "${lowered}" ]]; then
+            if [[ ${UNTRUSTED_IMAGE_NAME} != "${lowered}" ]]; then
               echo "::error::image-name must be lowercase"
               exit 1
             fi
@@ -298,9 +307,9 @@ jobs:
           count=0
           while IFS= read -r line; do
             line="${line%$'\r'}"
-            [[ -n "${line}" ]] || continue
+            [[ -n ${line} ]] || continue
             count=$((count + 1))
-            if [[ ! "${line}" =~ ${record} ]]; then
+            if [[ ! ${line} =~ ${record} ]]; then
               # The offending line is NOT echoed: it is caller-controlled,
               # and a log line is a place workflow commands get parsed.
               echo "::error::subject line ${count} is not a sha256sum record"
@@ -323,7 +332,6 @@ jobs:
           # Safe to echo: every line begins with 64 hex characters, so no
           # line can start with a `::workflow-command::`.
           cat "${manifest}"
-
       # `subject-checksums` derives every subject from sha256sum's own
       # output format, so this job never needs — and never receives — the
       # artifact bytes themselves.
@@ -374,6 +382,11 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ${{ steps.manifest.outputs.bundle-artifact }}
-          path: ${{ steps.attest.outputs.bundle-path || steps.attest-image.outputs.bundle-path || steps.attest-predicate.outputs.bundle-path || steps.attest-image-predicate.outputs.bundle-path }}
+          path: >-
+            ${{ steps.attest.outputs.bundle-path
+            || steps.attest-image.outputs.bundle-path
+            || steps.attest-predicate.outputs.bundle-path
+            || steps.attest-image-predicate.outputs.bundle-path }}
           if-no-files-found: error
           retention-days: 7
+...
