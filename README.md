@@ -3,7 +3,7 @@
 <!-- badges:begin -->
 [![ci](https://github.com/monumental-archive/signer/actions/workflows/gate.yml/badge.svg)](https://github.com/monumental-archive/signer/actions/workflows/gate.yml)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/monumental-archive/signer/badge)](https://scorecard.dev/viewer/?uri=github.com/monumental-archive/signer)
-[![SLSA source](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fmonumental-archive%2F.github%2Flevels%2Fsigner%2Fsource.shield.json)](https://raw.githubusercontent.com/monumental-archive/.github/levels/signer/source.report.json)
+[![SLSA source](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fmonumental-archive%2Fsigner%2Flevels%2Fsigner%2Fsource.shield.json)](https://raw.githubusercontent.com/monumental-archive/signer/levels/signer/source.report.json)
 <!-- pending (human step): OpenSSF Best Practices — answer the form from docs/best-practices.md, then set 'bestpractices <BP_ID>' in .badge-states and re-run fix:badges -->
 <!-- pending (human step): REUSE — register at https://api.reuse.software/register (no account: name, email, project URL, confirmation link), then set 'reuse registered' in .badge-states and re-run fix:badges -->
 [![fair-software](https://img.shields.io/badge/fair--software.eu-%E2%97%8F%20%E2%97%8F%20%E2%97%8B%20%E2%97%8B%20%E2%97%8B-orange)](https://fair-software.eu)
