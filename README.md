@@ -50,9 +50,31 @@ That window is closed.
 
 ## What lives here
 
-One signing workflow, [`sign.yml`](.github/workflows/sign.yml), plus the
-org CI gate stub, and nothing else — a change to the set of files in this
-repository is a design event, not housekeeping.
+One signing workflow, [`sign.yml`](.github/workflows/sign.yml). It is the
+only workflow here that another repository can call, and the only one
+that signs on a caller's behalf.
+
+The other six workflows are the org's own stubs, and none of them can be
+called from another repository:
+
+- [`gate.yml`](.github/workflows/gate.yml): the org CI gate on pull
+  requests, pushes to `main` and the merge queue.
+- [`audit.yml`](.github/workflows/audit.yml): the Monday audit,
+  including the dependency advisory feed.
+- [`dependency-review.yml`](.github/workflows/dependency-review.yml):
+  dependency review on pull requests.
+- [`level.yml`](.github/workflows/level.yml): measures this repository's
+  SLSA levels and publishes them to its `levels` branch.
+- [`scorecard.yml`](.github/workflows/scorecard.yml): OpenSSF Scorecard,
+  which signs its own result for the public API.
+- [`source-attest.yml`](.github/workflows/source-attest.yml): signs the
+  source provenance of this repository's own commits.
+
+The last two sign only facts about this repository, under their own
+workflow identities, never anything a caller hands them.
+
+A change to the set of files in this repository is a design event, not
+housekeeping.
 
 `sign.yml` takes exactly one subject shape per call — a `sha256sum`
 manifest for file artifacts, or a name-plus-digest pair for an OCI image —
@@ -61,8 +83,8 @@ holds `id-token: write`, `attestations: write` and
 `artifact-metadata: write`, and never `contents: write`: a signer that can
 publish is a signer that can be made to publish.
 
-Beyond build provenance it signs **allowlisted predicate claims** (the
-artifact VSA and OpenVEX today): the case statement in its validate step
+Beyond build provenance it signs **allowlisted predicate claims** (OpenVEX
+today): the case statement in its validate step
 is the org's entire signing surface, enumerable by reading the one file,
 and growing it is a reviewed change here. Every claim type verifies
 against the same identity; consumers vary only `--predicate-type`.
