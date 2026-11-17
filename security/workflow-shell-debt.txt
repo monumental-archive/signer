@@ -1,0 +1,26 @@
+# Workflow shell debt (monumental-archive/.github#1352): every `run:`
+# block over the 15-line ceiling that lint:workflow-shell holds, as this
+# tree had it when the canon pin that brought the ceiling (v1.68.7)
+# landed. The list only shrinks. lint:workflow-shell is red on a block
+# over the ceiling that is not listed, on a listed block that grew past
+# its number, and on an entry whose block is gone or now fits;
+# fix:workflow-shell lowers a number that shrank and removes a stale
+# entry. Nothing ever adds one: new logic goes to a helper (the canon's
+# CONTRIBUTING.md, "Workflow shell").
+#
+# One entry per line, four tab-separated fields: the file, the step's
+# `name:` (the key — line numbers rot, so the name must be unique among
+# the file's `run:` blocks), the block's non-blank non-comment lines, and
+# a `#` note naming the issue that removes it and where the logic goes:
+# `stele` when it judges or emits SLSA evidence, `canon helper` for
+# plumbing, `leaving` when its step is being deleted outright. The issue
+# that replaces a block deletes its entry in the same pull request. A
+# block no issue names yet carries its class and
+# `monumental-archive/.github#1352 unassigned`.
+#
+# sign.yml is pinned by every caller by commit SHA, so its entry leaves
+# only in a change that gives the signer a new identity callers re-pin.
+#
+# Generated from the tree by the lint's own counter (the org belt's
+# embedded-shell.py), never typed.
+.github/workflows/sign.yml	Validate and materialise the subject manifest	78	# stele: monumental-archive/.github#1352 unassigned
