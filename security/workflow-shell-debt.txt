@@ -20,7 +20,13 @@
 #
 # sign.yml is pinned by every caller by commit SHA, so its entry leaves
 # only in a change that gives the signer a new identity callers re-pin.
+# Its one entry is of a fourth class, `stays`: the signer runs nothing
+# it did not carry in its own pinned file (no checkout, no action, no
+# download; the header of sign.yml), so it cannot load a helper. The
+# step is tested where it is instead: tests/test_sign_validate_step.py
+# cuts its `run:` text out of the workflow and runs it
+# (monumental-archive/signer#90).
 #
 # Generated from the tree by the lint's own counter (the org belt's
 # embedded-shell.py), never typed.
-.github/workflows/sign.yml	Validate and materialise the subject manifest	78	# stele: monumental-archive/.github#1352 unassigned
+.github/workflows/sign.yml	Validate and materialise the subject manifest	78	# stays: the signer cannot load a helper; tested in place (monumental-archive/signer#90)
