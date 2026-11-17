@@ -3,5 +3,21 @@
 #
 # No language toolchain here, deliberately: this repository is YAML and
 # Markdown. A signer with a compiler in it is a signer with a build in it.
+# Its one test suite (tests/) is stdlib Python on the belt's interpreter,
+# and it tests sign.yml's own step text, not code the signer loads.
+
+# mise's `[task_config]` governs the file it is written in and layers
+# nowhere, and its own default shell is `sh` (dash on an Ubuntu runner),
+# where a failing command inside a pipeline does not fail the task.
+# `lint:belt-shell` reds a config that defines tasks and omits this.
+[task_config]
+shell = "bash -euo pipefail -c"
 
 [tools]
+
+[tasks.test]
+description = "sign.yml's input step, cut from the workflow and run row by row (stdlib unittest)"
+dir = "{{config_root}}"
+# An explicit root rather than a walk from `.`: a discovery root is a
+# claim about what is tested, and a wildcard makes that claim silently.
+run = 'python3 -m unittest discover --start-directory tests --pattern "test_*.py"'
