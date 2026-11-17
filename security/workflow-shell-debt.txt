@@ -25,8 +25,11 @@
 # download; the header of sign.yml), so it cannot load a helper. The
 # step is tested where it is instead: tests/test_sign_validate_step.py
 # cuts its `run:` text out of the workflow and runs it
-# (monumental-archive/signer#90).
+# (monumental-archive/signer#90). Its count rose once, 78 to 82, for
+# the bundle-artifact check that closed signer#91: a recorded count must
+# be true, and the lines are a defect's decided fix that has nowhere
+# else to live.
 #
 # Generated from the tree by the lint's own counter (the org belt's
 # embedded-shell.py), never typed.
-.github/workflows/sign.yml	Validate and materialise the subject manifest	78	# stays: the signer cannot load a helper; tested in place (monumental-archive/signer#90)
+.github/workflows/sign.yml	Validate and materialise the subject manifest	82	# stays: the signer cannot load a helper; tested in place (monumental-archive/signer#90); 78 to 82 for the bundle-artifact check (monumental-archive/signer#91)

@@ -291,6 +291,12 @@ class Run:
 # refuses at. The step writes as it goes; none of these is read by an
 # attest step, because the job stops at the step's exit 1.
 AT_PREDICATE = {"outputs": {"bundle-artifact": "attestation-bundle"}, "files": []}
+# A predicate the parser refuses leaves the file its redirect opened,
+# empty; PREDICATE_FILE is never exported for it.
+AT_PARSE = {
+    "outputs": {"bundle-artifact": "attestation-bundle"},
+    "files": ["predicate.json"],
+}
 AT_SUBJECTS = {
     "outputs": {"bundle-artifact": "attestation-bundle", "predicate": "false"},
     "files": [],
@@ -345,7 +351,7 @@ REFUSALS = [
             "UNTRUSTED_SUBJECTS": manifest(1),
         },
         "predicate is not a single JSON object",
-        AT_PREDICATE,
+        AT_PARSE,
     ),
     (
         "predicate is not JSON",
@@ -355,7 +361,7 @@ REFUSALS = [
             "UNTRUSTED_SUBJECTS": manifest(1),
         },
         "predicate is not a single JSON object",
-        AT_PREDICATE,
+        AT_PARSE,
     ),
     (
         "both kinds of subject",
@@ -514,6 +520,159 @@ class Refusals(unittest.TestCase):
         ):
             with self.subTest(inputs=inputs):
                 self.assertNotIn(hostile, Run(self, inputs).stdout)
+
+
+PREDICATE_MESSAGE = "predicate is not a single JSON object"
+# Each refused by the parser (#92). The first three and the numbers were
+# accepted by jq 1.8.2, which this step used before.
+NOT_ONE_STANDARD_OBJECT = [
+    ("two documents", '{}{"a":1}'),
+    ("NaN", '{"a":NaN}'),
+    ("Infinity", '{"a":Infinity}'),
+    ("-Infinity", '{"a":-Infinity}'),
+    ("a number no double holds", '{"a":1e1000}'),
+    ("a leading-dot number", '{"a":.5}'),
+    ("a plus-signed number", '{"a":+1}'),
+    ("a leading zero", '{"a":01}'),
+    ("an array", "[]"),
+    ("a string", '"s"'),
+    ("an object then garbage", '{"a":1} x'),
+]
+
+
+class PredicateJson(unittest.TestCase):
+    """The predicate is exactly one object in standard JSON (#92)."""
+
+    def test_predicate_must_be_one_standard_object(self) -> None:
+        """Refuse anything else; write one object in its compact form."""
+        for name, predicate in NOT_ONE_STANDARD_OBJECT:
+            with self.subTest(name):
+                run = Run(
+                    self,
+                    {
+                        "UNTRUSTED_PREDICATE_TYPE": OPENVEX,
+                        "UNTRUSTED_PREDICATE": predicate,
+                        "UNTRUSTED_SUBJECTS": manifest(1),
+                    },
+                )
+                self.assertEqual(run.code, 1, run.stderr)
+                self.assertEqual(run.stdout, f"::error::{PREDICATE_MESSAGE}\n")
+                self.assertEqual(run.stderr, "")
+                self.assertEqual(run.environment(), {})
+                self.assertEqual(
+                    (run.temp / "predicate.json").read_text(encoding="utf-8"), ""
+                )
+        with self.subTest("an empty input"):
+            # Refused before the parser, by the presence check.
+            run = Run(
+                self,
+                {
+                    "UNTRUSTED_PREDICATE_TYPE": OPENVEX,
+                    "UNTRUSTED_SUBJECTS": manifest(1),
+                },
+            )
+            self.assertEqual(
+                run.stdout,
+                "::error::predicate-type without a predicate asserts nothing\n",
+            )
+        with self.subTest("one object"):
+            # Key order kept, whitespace dropped, a big integer exact,
+            # non-ASCII escaped whether it was sent raw or escaped.
+            sent = (
+                '{\n  "b": [1, 2.5, 100000000000000000001],\n'
+                '  "a": "na\u00efve \\u00ef",\n  "c": null\n}\n'
+            )
+            run = Run(
+                self,
+                {
+                    "UNTRUSTED_PREDICATE_TYPE": OPENVEX,
+                    "UNTRUSTED_PREDICATE": sent,
+                    "UNTRUSTED_SUBJECTS": manifest(1),
+                },
+            )
+            self.assertEqual(run.code, 0, run.stdout + run.stderr)
+            written = (run.temp / "predicate.json").read_text(encoding="utf-8")
+            self.assertEqual(
+                written,
+                '{"b":[1,2.5,100000000000000000001],'
+                '"a":"na\\u00efve \\u00ef","c":null}\n',
+            )
+            self.assertEqual(json.loads(written), json.loads(sent))
+
+
+BUNDLE_MESSAGE = "bundle-artifact must be one name of letters, digits, '.', '_' and '-'"
+# The names the canon's callers pass (publish.yml, continuous.yml,
+# vex-attest.yml at v1.68.7), a matrix value filled in where they
+# interpolate one.
+CANON_BUNDLES = [
+    "attestation-bundle",
+    "attestation-bundle-image",
+    "attestation-bundle-crates",
+    "attestation-bundle-binaries",
+    "attestation-bundle-go-binaries",
+    "attestation-bundle-source",
+    "attestation-bundle-npm",
+    "attestation-bundle-extensions",
+    "attestation-bundle-extimg-pg17",
+    "attestation-bundle-vex-stele_v1.2.0",
+]
+
+
+class BundleArtifact(unittest.TestCase):
+    """bundle-artifact is one artifact name, checked before any write (#91)."""
+
+    def assert_refused(self, run: Run) -> None:
+        """Assert the bundle refusal, with nothing written at all."""
+        self.assertEqual(run.code, 1, run.stderr)
+        self.assertEqual(run.stdout, f"::error::{BUNDLE_MESSAGE}\n")
+        self.assertEqual(run.stderr, "")
+        self.assertFalse(run.output.exists())
+        self.assertFalse(run.env_file.exists())
+        self.assertEqual(run.files(), [])
+
+    def test_bundle_artifact_cannot_write_another_output(self) -> None:
+        """A newline and `predicate=true` is refused and writes no output."""
+        run = Run(
+            self,
+            {
+                "UNTRUSTED_BUNDLE_ARTIFACT": "attestation-bundle\npredicate=true",
+                "UNTRUSTED_SUBJECTS": manifest(1),
+            },
+        )
+        self.assert_refused(run)
+
+    def test_names_that_are_not_one_artifact_name(self) -> None:
+        """A space, a slash, an explicit empty string, a trailing newline."""
+        for name in (
+            "attestation bundle",
+            "attestation/bundle",
+            "",
+            "attestation-bundle\n",
+        ):
+            with self.subTest(name=name):
+                self.assert_refused(
+                    Run(
+                        self,
+                        {
+                            "UNTRUSTED_BUNDLE_ARTIFACT": name,
+                            "UNTRUSTED_SUBJECTS": manifest(1),
+                        },
+                    ),
+                )
+
+    def test_the_canon_names_pass(self) -> None:
+        """Every name the canon's callers pass is written as given."""
+        for name in CANON_BUNDLES:
+            with self.subTest(name=name):
+                run = Run(
+                    self,
+                    {
+                        "UNTRUSTED_BUNDLE_ARTIFACT": name,
+                        "UNTRUSTED_SUBJECTS": manifest(1),
+                    },
+                )
+                self.assertEqual(run.code, 0, run.stdout + run.stderr)
+                self.assertEqual(run.outputs()["bundle-artifact"], name)
 
 
 class Passes(unittest.TestCase):
