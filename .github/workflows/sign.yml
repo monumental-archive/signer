@@ -212,6 +212,14 @@ jobs:
           UNTRUSTED_BUNDLE_ARTIFACT: ${{ inputs.bundle-artifact }}
         run: |
           set -euo pipefail
+          # Checked before anything is written: it is the one input that
+          # reaches GITHUB_OUTPUT as given, and a newline in it would add
+          # output lines of the caller's choosing, `mode=` and `predicate=`
+          # among them (#91). One name in the set an artifact name takes.
+          if [[ ! ${UNTRUSTED_BUNDLE_ARTIFACT} =~ ^[A-Za-z0-9._-]+$ ]]; then
+            echo "::error::bundle-artifact must be one name of letters, digits, '.', '_' and '-'"
+            exit 1
+          fi
           echo "bundle-artifact=${UNTRUSTED_BUNDLE_ARTIFACT}" >> "${GITHUB_OUTPUT}"
 
           # THE ALLOWLIST. This case statement is the complete set of claim
