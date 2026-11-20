@@ -42,7 +42,7 @@ collects.
 import json
 import os
 import shutil
-import subprocess  # ruff: ignore[suspicious-subprocess-import]
+import subprocess
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -198,7 +198,6 @@ def bash_major() -> int:
     """
     if BASH is None:
         return 0
-    # ruff: ignore[subprocess-without-shell-equals-true]
     done = subprocess.run(
         [BASH, "-c", 'printf %s "${BASH_VERSINFO[0]}"'],
         capture_output=True,
@@ -241,7 +240,6 @@ class Run:
         }
         env |= DEFAULTS | inputs
         # The runner's own invocation for `shell: bash`.
-        # ruff: ignore[subprocess-without-shell-equals-true]
         completed = subprocess.run(
             [BASH, "--noprofile", "--norc", "-eo", "pipefail", str(step)],
             env=env,
