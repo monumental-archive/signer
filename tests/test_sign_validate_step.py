@@ -67,6 +67,10 @@ DEFAULTS = {
 }
 LARGE = 1000  # subject rows above this many lines need bash 4
 BASH_FAST = 4  # the first major version that runs them in seconds
+# What an assertion expects when nothing was exported or written: typed,
+# because a bare `{}` or `[]` handed to assertEqual is read as Any.
+NO_ENVIRONMENT: dict[str, str] = {}
+NO_FILES: list[str] = []
 
 
 class StepNotFoundError(Exception):
@@ -175,6 +179,17 @@ def extract_step(text: str) -> tuple[str, list[str]]:
         raise StepNotFoundError(msg)
     margin = indent(block[0])
     return "\n".join(line[margin:] for line in block) + "\n", names
+
+
+def parsed(text: str) -> object:
+    """Read one JSON document as an object, to compare two by value.
+
+    Returns:
+        The decoded value, unnarrowed: the tests only compare it.
+
+    """
+    value: object = json.loads(text)
+    return value
 
 
 def manifest(count: int, ending: str = "\n") -> str:
@@ -482,7 +497,9 @@ class Extraction(unittest.TestCase):
     def test_every_declared_input_is_set_by_the_rows(self) -> None:
         """An input added to the step's env cannot go untested."""
         _, names = extract_step(WORKFLOW.read_text(encoding="utf-8"))
-        self.assertEqual(sorted(names), sorted(DEFAULTS))
+        declared: list[str] = sorted(names)
+        expected: list[str] = sorted(DEFAULTS)
+        self.assertEqual(declared, expected)
 
     def test_no_expression_is_expanded_into_the_code(self) -> None:
         """Caller values reach the step through env only, never `${{ }}`."""
@@ -502,7 +519,7 @@ class Refusals(unittest.TestCase):
                 self.assertEqual(run.stdout, f"::error::{message}\n")
                 self.assertEqual(run.stderr, "")
                 self.assertEqual(run.outputs(), written["outputs"])
-                self.assertEqual(run.environment(), {})
+                self.assertEqual(run.environment(), NO_ENVIRONMENT)
                 self.assertEqual(run.files(), written["files"])
 
     def test_refusal_does_not_echo_the_offending_value(self) -> None:
@@ -556,7 +573,7 @@ class PredicateJson(unittest.TestCase):
                 self.assertEqual(run.code, 1, run.stderr)
                 self.assertEqual(run.stdout, f"::error::{PREDICATE_MESSAGE}\n")
                 self.assertEqual(run.stderr, "")
-                self.assertEqual(run.environment(), {})
+                self.assertEqual(run.environment(), NO_ENVIRONMENT)
                 self.assertEqual(
                     (run.temp / "predicate.json").read_text(encoding="utf-8"), ""
                 )
@@ -595,7 +612,7 @@ class PredicateJson(unittest.TestCase):
                 '{"b":[1,2.5,100000000000000000001],'
                 '"a":"na\\u00efve \\u00ef","c":null}\n',
             )
-            self.assertEqual(json.loads(written), json.loads(sent))
+            self.assertEqual(parsed(written), parsed(sent))
 
 
 BUNDLE_MESSAGE = "bundle-artifact must be one name of letters, digits, '.', '_' and '-'"
@@ -626,7 +643,7 @@ class BundleArtifact(unittest.TestCase):
         self.assertEqual(run.stderr, "")
         self.assertFalse(run.output.exists())
         self.assertFalse(run.env_file.exists())
-        self.assertEqual(run.files(), [])
+        self.assertEqual(run.files(), NO_FILES)
 
     def test_bundle_artifact_cannot_write_another_output(self) -> None:
         """A newline and `predicate=true` is refused and writes no output."""
@@ -697,26 +714,22 @@ class Passes(unittest.TestCase):
         self.assert_passed(run)
         predicate_file = run.temp / "predicate.json"
         subjects_file = run.temp / "subjects.sha256"
-        self.assertEqual(
-            run.outputs(),
-            {
-                "bundle-artifact": "attestation-bundle",
-                "predicate": "true",
-                "mode": "files",
-            },
-        )
-        self.assertEqual(
-            run.environment(),
-            {
-                "PREDICATE_FILE": str(predicate_file),
-                "SUBJECTS_FILE": str(subjects_file),
-            },
-        )
+        outputs: dict[str, str] = {
+            "bundle-artifact": "attestation-bundle",
+            "predicate": "true",
+            "mode": "files",
+        }
+        self.assertEqual(run.outputs(), outputs)
+        environment: dict[str, str] = {
+            "PREDICATE_FILE": str(predicate_file),
+            "SUBJECTS_FILE": str(subjects_file),
+        }
+        self.assertEqual(run.environment(), environment)
         written = predicate_file.read_text(encoding="utf-8")
         self.assertEqual(
             written, '{"@context":"https://openvex.dev/ns/v0.2.0","statements":[]}\n'
         )
-        self.assertEqual(json.loads(written), json.loads(predicate))
+        self.assertEqual(parsed(written), parsed(predicate))
         self.assertEqual(subjects_file.read_text(encoding="utf-8"), manifest(2))
         self.assertEqual(
             run.stdout,
@@ -735,12 +748,14 @@ class Passes(unittest.TestCase):
             },
         )
         self.assert_passed(run)
-        self.assertEqual(
-            run.outputs(),
-            {"bundle-artifact": "image-bundle", "predicate": "false", "mode": "image"},
-        )
-        self.assertEqual(run.environment(), {})
-        self.assertEqual(run.files(), [])
+        outputs: dict[str, str] = {
+            "bundle-artifact": "image-bundle",
+            "predicate": "false",
+            "mode": "image",
+        }
+        self.assertEqual(run.outputs(), outputs)
+        self.assertEqual(run.environment(), NO_ENVIRONMENT)
+        self.assertEqual(run.files(), NO_FILES)
         self.assertEqual(run.stdout, "::notice::signing one image subject\n")
 
     def test_1024_file_subjects(self) -> None:
@@ -748,15 +763,14 @@ class Passes(unittest.TestCase):
         run = Run(self, {"UNTRUSTED_SUBJECTS": manifest(1024)})
         self.assert_passed(run)
         subjects_file = run.temp / "subjects.sha256"
-        self.assertEqual(
-            run.outputs(),
-            {
-                "bundle-artifact": "attestation-bundle",
-                "predicate": "false",
-                "mode": "files",
-            },
-        )
-        self.assertEqual(run.environment(), {"SUBJECTS_FILE": str(subjects_file)})
+        outputs: dict[str, str] = {
+            "bundle-artifact": "attestation-bundle",
+            "predicate": "false",
+            "mode": "files",
+        }
+        self.assertEqual(run.outputs(), outputs)
+        environment: dict[str, str] = {"SUBJECTS_FILE": str(subjects_file)}
+        self.assertEqual(run.environment(), environment)
         self.assertEqual(subjects_file.read_text(encoding="utf-8"), manifest(1024))
         self.assertEqual(
             run.stdout,
