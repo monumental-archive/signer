@@ -54,13 +54,21 @@ One signing workflow, [`sign.yml`](.github/workflows/sign.yml). It is the
 only workflow here that another repository can call, and the only one
 that signs on a caller's behalf.
 
-The other six workflows are the org's own stubs, and none of them can be
+The other ten workflows are the org's own stubs, and none of them can be
 called from another repository:
 
 - [`gate.yml`](.github/workflows/gate.yml): the org CI gate on pull
   requests, pushes to `main` and the merge queue.
-- [`audit.yml`](.github/workflows/audit.yml): the Monday audit,
-  including the dependency advisory feed.
+- [`dependencies.yml`](.github/workflows/dependencies.yml): the
+  dependencies and pins, held to the live advisory feed and registries.
+- [`deep-tests.yml`](.github/workflows/deep-tests.yml): fuzz targets,
+  coverage floors and random-seed properties.
+- [`public-api.yml`](.github/workflows/public-api.yml): the public API
+  against the latest published release.
+- [`records.yml`](.github/workflows/records.yml): links, the best
+  practices entry and the regression-test report.
+- [`own-audits.yml`](.github/workflows/own-audits.yml): this
+  repository's own `audit:*` tasks.
 - [`dependency-review.yml`](.github/workflows/dependency-review.yml):
   dependency review on pull requests.
 - [`level.yml`](.github/workflows/level.yml): measures this repository's
